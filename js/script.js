@@ -10,10 +10,11 @@ L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=p
 }).addTo(mymap);
 
 var loadedGares = [],
-    markers= [],
+    markers = [],
+    nblost,
     typesFilter;
 // display train station in the map with type object filter
-function displayMapGares(mymap, typesF) {
+function displayMapGares(mymap, typesF, nblost) {
     // bounds contain the geographical bounds visible in the current map view
     var bounds = mymap.getBounds();
     //create polygone for the geofilterPolygon filtre
@@ -21,12 +22,13 @@ function displayMapGares(mymap, typesF) {
         "(" + bounds._southWest.lat + "," + bounds._southWest.lng + "),(" + bounds._southWest.lat + "," + bounds._southWest.lng + ")";
     geofilterPolygon = encodeURIComponent(geofilterPolygon);
     var garesRequestUrl = 'https://data.sncf.com/api/records/1.0/search/?dataset=liste-des-gares&geofilter.polygon=' + geofilterPolygon + '&rows=100';
-
+    //send request
     const garesRequest = new XMLHttpRequest();
     garesRequest.open('GET', garesRequestUrl, false);
     garesRequest.send(null);
 
     if (garesRequest.status === 200) {
+        //convert the results to JSON
         var responseGares = JSON.parse(garesRequest.responseText);
         var gares = responseGares.records;
         gares.map(function (gare) {
@@ -35,10 +37,18 @@ function displayMapGares(mymap, typesF) {
             if (!~loadedGares.indexOf(gareId)) {
                 loadedGares.push(gareId);
                 lostObjects = getLostObjectsByGare(gareId, typesF);
-                var coorGare = gare.fields.coordonnees_geographiques;             
-                markers.push(L.marker(coorGare)
-                    .bindPopup(gare.fields.libelle_gare + '(' + lostObjects.nhits + ')')
-                    .addTo(mymap));
+                var coorGare = gare.fields.coordonnees_geographiques;
+                if (!nblost) {
+                    markers.push(L.marker(coorGare)
+                        .bindPopup(gare.fields.libelle_gare + '(' + lostObjects.nhits + ')')
+                        .addTo(mymap));
+                } else if (nblost && lostObjects.nhits >= nblost) {
+                    markers.push(L.marker(coorGare)
+                        .bindPopup(gare.fields.libelle_gare + '(' + lostObjects.nhits + ')')
+                        .addTo(mymap));
+                } else {
+                    return;
+                }
 
             }
         });
@@ -70,18 +80,21 @@ document.getElementById("type").addEventListener("change", function () {
     typesFilter = this.value;
     loadedGares = [];
     // remove markers from map
-    markers.map(function(marker){
+    markers.map(function (marker) {
         marker.remove();
     });
     //remove markers references
-    markers =[];
-    displayMapGares(mymap, typesFilter);
+    markers = [];
+    displayMapGares(mymap, typesFilter, nblost);
 }, false);
-
+document.getElementById("nblost").addEventListener("change", function () {
+    nblost = this.value;
+    displayMapGares(mymap, typesFilter, nblost);
+}, false);
 
 displayMapGares(mymap, typesFilter);
 
-mymap.on('moveend', displayMapGares.bind(this, mymap, typesFilter));
+mymap.on('moveend', displayMapGares.bind(this, mymap, typesFilter, nblost));
 
 
 
